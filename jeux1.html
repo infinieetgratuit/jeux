@@ -1,0 +1,495 @@
+
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Astro-Défenestrateur</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #000;
+            --text-color: #FFF;
+            --player-color: #00ff00;
+            --enemy-color: #ff00ff;
+            --bullet-color: #ffff00;
+            --explosion-color: #ff8800;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Press Start 2P', cursive;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: grid;
+            place-items: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        #game-container {
+            width: 800px;
+            height: 600px;
+            max-width: 100vw;
+            max-height: 100vh;
+            border: 2px solid var(--text-color);
+            position: relative;
+            background-color: #080808;
+            overflow: hidden;
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.5);
+        }
+        
+        /* --- Écrans de jeu --- */
+        .screen {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            gap: 30px;
+            background: rgba(0,0,0,0.8);
+            z-index: 100;
+        }
+
+        .screen h1 {
+            font-size: 2.5rem;
+            color: var(--player-color);
+            text-shadow: 0 0 10px var(--player-color);
+        }
+        .screen h2 {
+            font-size: 1.5rem;
+            color: var(--bullet-color);
+        }
+        .screen p {
+            font-size: 0.9rem;
+            line-height: 1.6;
+            max-width: 60%;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .btn {
+            font-family: inherit;
+            font-size: 1.2rem;
+            padding: 15px 30px;
+            background: transparent;
+            border: 2px solid var(--text-color);
+            color: var(--text-color);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn:hover {
+            background: var(--text-color);
+            color: var(--bg-color);
+            box-shadow: 0 0 15px var(--text-color);
+        }
+
+        /* --- UI en jeu --- */
+        #game-ui {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            right: 10px;
+            display: flex;
+            justify-content: space-between;
+            font-size: 1.2rem;
+            z-index: 50;
+        }
+        
+        /* --- Éléments de jeu --- */
+        #player {
+            width: 50px;
+            height: 30px;
+            background-color: var(--player-color);
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
+        }
+        
+        .bullet {
+            width: 5px;
+            height: 15px;
+            background-color: var(--bullet-color);
+            position: absolute;
+        }
+        
+        .enemy {
+            width: 40px;
+            height: 40px;
+            background-color: var(--enemy-color);
+            position: absolute;
+            font-size: 30px; /* Pour utiliser des emojis */
+            display: grid;
+            place-items: center;
+        }
+
+        .enemy-bullet {
+            width: 8px;
+            height: 8px;
+            background-color: #ff4141;
+            border-radius: 50%;
+            position: absolute;
+        }
+        
+        .explosion {
+            position: absolute;
+            width: 50px;
+            height: 50px;
+            background-color: var(--explosion-color);
+            border-radius: 50%;
+            animation: explode 0.3s forwards;
+        }
+
+        @keyframes explode {
+            from { transform: scale(0); opacity: 1; }
+            to { transform: scale(2); opacity: 0; }
+        }
+
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+
+    <!-- Écran de Démarrage -->
+    <div id="start-screen" class="screen">
+        <h1>Astro-Défenestrateur</h1>
+        <p>Utilisez les flèches GAUCHE et DROITE pour vous déplacer.<br>Appuyez sur ESPACE pour tirer.<br>Sauvez la galaxie !</p>
+        <button id="start-button" class="btn">Commencer</button>
+    </div>
+
+    <!-- Écran de Jeu -->
+    <div id="game-screen" class="hidden">
+        <div id="game-ui">
+            <span id="score">Score: 0</span>
+            <span id="lives">Vies: 3</span>
+        </div>
+        <div id="player"></div>
+    </div>
+
+    <!-- Écran de Game Over -->
+    <div id="game-over-screen" class="screen hidden">
+        <h1>GAME OVER</h1>
+        <h2 id="final-score"></h2>
+        <button id="restart-button" class="btn">Rejouer</button>
+    </div>
+
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    // --- Éléments du DOM ---
+    const gameContainer = document.getElementById('game-container');
+    const startScreen = document.getElementById('start-screen');
+    const gameScreen = document.getElementById('game-screen');
+    const gameOverScreen = document.getElementById('game-over-screen');
+    const startButton = document.getElementById('start-button');
+    const restartButton = document.getElementById('restart-button');
+    const player = document.getElementById('player');
+    const scoreDisplay = document.getElementById('score');
+    const livesDisplay = document.getElementById('lives');
+    const finalScoreDisplay = document.getElementById('final-score');
+
+    // --- Paramètres du jeu ---
+    const PLAYER_SPEED = 8;
+    const BULLET_SPEED = 10;
+    const ENEMY_BULLET_SPEED = 5;
+    const ENEMY_SPAWN_COLS = 8;
+    const ENEMY_SPAWN_ROWS = 4;
+    
+    // --- État du jeu ---
+    let gameState = {};
+
+    function resetGameState() {
+        gameState = {
+            score: 0,
+            lives: 3,
+            isGameOver: false,
+            playerX: gameContainer.offsetWidth / 2 - player.offsetWidth / 2,
+            keys: {},
+            bullets: [],
+            enemies: [],
+            enemyBullets: [],
+            enemyDirection: 1,
+            enemyMoveDown: false,
+            enemySpeed: 1,
+            lastEnemyShotTime: 0,
+            enemyFireRate: 1000, // ms
+        };
+    }
+
+    // --- Fonctions de changement d'écran ---
+    function showScreen(screen) {
+        startScreen.classList.add('hidden');
+        gameScreen.classList.add('hidden');
+        gameOverScreen.classList.add('hidden');
+        screen.classList.remove('hidden');
+    }
+
+    function startGame() {
+        resetGameState();
+        clearGameElements();
+        createEnemies();
+        updateUI();
+        showScreen(gameScreen);
+        gameLoop();
+    }
+    
+    function endGame() {
+        gameState.isGameOver = true;
+        finalScoreDisplay.textContent = `Score final: ${gameState.score}`;
+        showScreen(gameOverScreen);
+    }
+    
+    function clearGameElements() {
+        document.querySelectorAll('.bullet, .enemy, .enemy-bullet, .explosion').forEach(el => el.remove());
+    }
+
+    // --- Création des ennemis ---
+    function createEnemies() {
+        const enemySize = 40;
+        const enemySpacing = 15;
+        const startX = (gameContainer.offsetWidth - (ENEMY_SPAWN_COLS * (enemySize + enemySpacing))) / 2;
+        const startY = 50;
+
+        for (let row = 0; row < ENEMY_SPAWN_ROWS; row++) {
+            for (let col = 0; col < ENEMY_SPAWN_COLS; col++) {
+                const enemy = document.createElement('div');
+                enemy.className = 'enemy';
+                enemy.style.left = `${startX + col * (enemySize + enemySpacing)}px`;
+                enemy.style.top = `${startY + row * (enemySize + enemySpacing)}px`;
+                enemy.innerHTML = '👾'; // Vous pouvez changer l'emoji ici !
+                gameScreen.appendChild(enemy);
+                gameState.enemies.push({
+                    element: enemy,
+                    x: startX + col * (enemySize + enemySpacing),
+                    y: startY + row * (enemySize + enemySpacing)
+                });
+            }
+        }
+    }
+
+    // --- Boucle de jeu principale ---
+    let lastTime = 0;
+    function gameLoop(timestamp) {
+        if (gameState.isGameOver) return;
+        
+        const deltaTime = timestamp - lastTime;
+        lastTime = timestamp;
+
+        updatePlayer();
+        updateBullets();
+        updateEnemies();
+        updateEnemyBullets();
+        checkCollisions();
+
+        requestAnimationFrame(gameLoop);
+    }
+    
+    // --- Mises à jour des éléments ---
+    function updatePlayer() {
+        if (gameState.keys['ArrowLeft'] && gameState.playerX > 0) {
+            gameState.playerX -= PLAYER_SPEED;
+        }
+        if (gameState.keys['ArrowRight'] && gameState.playerX < gameContainer.offsetWidth - player.offsetWidth) {
+            gameState.playerX += PLAYER_SPEED;
+        }
+        player.style.left = `${gameState.playerX}px`;
+    }
+
+    function updateBullets() {
+        gameState.bullets.forEach((bullet, index) => {
+            bullet.y -= BULLET_SPEED;
+            if (bullet.y < 0) {
+                bullet.element.remove();
+                gameState.bullets.splice(index, 1);
+            } else {
+                bullet.element.style.top = `${bullet.y}px`;
+            }
+        });
+    }
+    
+    function updateEnemies() {
+        let hitEdge = false;
+        
+        if (gameState.enemyMoveDown) {
+            gameState.enemies.forEach(enemy => enemy.y += 20);
+            gameState.enemyDirection *= -1;
+            gameState.enemyMoveDown = false;
+        } else {
+            gameState.enemies.forEach(enemy => {
+                enemy.x += gameState.enemySpeed * gameState.enemyDirection;
+                if (enemy.x <= 0 || enemy.x >= gameContainer.offsetWidth - enemy.element.offsetWidth) {
+                    hitEdge = true;
+                }
+            });
+        }
+        
+        if (hitEdge) {
+            gameState.enemyMoveDown = true;
+        }
+        
+        gameState.enemies.forEach(enemy => {
+            enemy.element.style.left = `${enemy.x}px`;
+            enemy.element.style.top = `${enemy.y}px`;
+        });
+        
+        // Tir ennemi
+        if (Date.now() - gameState.lastEnemyShotTime > gameState.enemyFireRate && gameState.enemies.length > 0) {
+            const shootingEnemy = gameState.enemies[Math.floor(Math.random() * gameState.enemies.length)];
+            createEnemyBullet(shootingEnemy.x, shootingEnemy.y);
+            gameState.lastEnemyShotTime = Date.now();
+        }
+    }
+    
+    function updateEnemyBullets() {
+        gameState.enemyBullets.forEach((bullet, index) => {
+            bullet.y += ENEMY_BULLET_SPEED;
+            if (bullet.y > gameContainer.offsetHeight) {
+                bullet.element.remove();
+                gameState.enemyBullets.splice(index, 1);
+            } else {
+                bullet.element.style.top = `${bullet.y}px`;
+            }
+        });
+    }
+
+    // --- Gestion des tirs ---
+    function createPlayerBullet() {
+        const bullet = document.createElement('div');
+        bullet.className = 'bullet';
+        gameScreen.appendChild(bullet);
+        const bulletState = {
+            element: bullet,
+            x: gameState.playerX + player.offsetWidth / 2 - bullet.offsetWidth / 2,
+            y: gameContainer.offsetHeight - player.offsetHeight - 20
+        };
+        bullet.style.left = `${bulletState.x}px`;
+        bullet.style.top = `${bulletState.y}px`;
+        gameState.bullets.push(bulletState);
+    }
+    
+    function createEnemyBullet(x, y) {
+        const bullet = document.createElement('div');
+        bullet.className = 'enemy-bullet';
+        gameScreen.appendChild(bullet);
+        const bulletState = {
+            element: bullet,
+            x: x + 20, // center of enemy
+            y: y + 40
+        };
+        bullet.style.left = `${bulletState.x}px`;
+        bullet.style.top = `${bulletState.y}px`;
+        gameState.enemyBullets.push(bulletState);
+    }
+    
+    // --- Détection des collisions ---
+    function checkCollisions() {
+        // Tirs du joueur vs ennemis
+        gameState.bullets.forEach((bullet, bIndex) => {
+            gameState.enemies.forEach((enemy, eIndex) => {
+                if (isColliding(bullet.element, enemy.element)) {
+                    createExplosion(enemy.x, enemy.y);
+                    bullet.element.remove();
+                    enemy.element.remove();
+                    gameState.bullets.splice(bIndex, 1);
+                    gameState.enemies.splice(eIndex, 1);
+                    gameState.score += 100;
+                    updateUI();
+                    
+                    if (gameState.enemies.length === 0) {
+                        // Vague terminée
+                        gameState.enemySpeed += 0.5;
+                        gameState.enemyFireRate = Math.max(200, gameState.enemyFireRate - 100);
+                        createEnemies();
+                    }
+                }
+            });
+        });
+        
+        // Tirs ennemis vs joueur
+        gameState.enemyBullets.forEach((bullet, index) => {
+            if (isColliding(bullet.element, player)) {
+                bullet.element.remove();
+                gameState.enemyBullets.splice(index, 1);
+                playerHit();
+            }
+        });
+
+        // Ennemis vs joueur
+        gameState.enemies.forEach(enemy => {
+            if (isColliding(enemy.element, player)) {
+                endGame();
+            }
+        });
+    }
+
+    function isColliding(el1, el2) {
+        const rect1 = el1.getBoundingClientRect();
+        const rect2 = el2.getBoundingClientRect();
+        return !(rect1.right < rect2.left || rect1.left > rect2.right || rect1.bottom < rect2.top || rect1.top > rect2.bottom);
+    }
+    
+    function playerHit() {
+        gameState.lives--;
+        updateUI();
+        createExplosion(gameState.playerX, gameContainer.offsetHeight - 50);
+        if (gameState.lives <= 0) {
+            endGame();
+        }
+    }
+
+    function createExplosion(x, y) {
+        const explosion = document.createElement('div');
+        explosion.className = 'explosion';
+        explosion.style.left = `${x}px`;
+        explosion.style.top = `${y}px`;
+        gameScreen.appendChild(explosion);
+        setTimeout(() => explosion.remove(), 300);
+    }
+    
+    // --- UI ---
+    function updateUI() {
+        scoreDisplay.textContent = `Score: ${gameState.score}`;
+        livesDisplay.textContent = `Vies: ${gameState.lives}`;
+    }
+
+    // --- Écouteurs d'événements ---
+    startButton.addEventListener('click', startGame);
+    restartButton.addEventListener('click', startGame);
+    
+    document.addEventListener('keydown', e => {
+        gameState.keys[e.code] = true;
+        if (e.code === 'Space' && !gameState.isGameOver && gameScreen.classList.contains('hidden') === false) {
+            createPlayerBullet();
+        }
+    });
+
+    document.addEventListener('keyup', e => {
+        gameState.keys[e.code] = false;
+    });
+
+    // --- Initialisation ---
+    resetGameState();
+    showScreen(startScreen);
+});
+</script>
+
+</body>
+</html>
